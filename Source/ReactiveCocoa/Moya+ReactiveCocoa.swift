@@ -9,9 +9,10 @@ public class ReactiveCocoaMoyaProvider<Target where Target: TargetType>: MoyaPro
         requestClosure: RequestClosure = MoyaProvider.DefaultRequestMapping,
         stubClosure: StubClosure = MoyaProvider.NeverStub,
         manager: Manager = ReactiveCocoaMoyaProvider<Target>.DefaultAlamofireManager(),
-        plugins: [PluginType] = [], stubScheduler: DateSchedulerType? = nil) {
+        plugins: [PluginType] = [], stubScheduler: DateSchedulerType? = nil,
+        trackInflights:Bool = false) {
             self.stubScheduler = stubScheduler
-            super.init(endpointClosure: endpointClosure, requestClosure: requestClosure, stubClosure: stubClosure, manager: manager, plugins: plugins)
+            super.init(endpointClosure: endpointClosure, requestClosure: requestClosure, stubClosure: stubClosure, manager: manager, plugins: plugins, trackInflights: trackInflights)
     }
     
     /// Designated request-making method.
@@ -58,10 +59,5 @@ public class ReactiveCocoaMoyaProvider<Target where Target: TargetType>: MoyaPro
             fatalError("Attempted to stub request when behavior requested was never stub!")
         }
         return token
-    }
-
-    @available(*, deprecated, message="This will be removed when ReactiveCocoa 4 becomes final. Please visit https://github.com/Moya/Moya/issues/298 for more information.")
-    public func request(token: Target) -> RACSignal {
-        return request(token).toRACSignal()
     }
 }

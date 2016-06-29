@@ -10,51 +10,6 @@ class ReactiveCocoaMoyaProviderSpec: QuickSpec {
         beforeEach {
             provider = ReactiveCocoaMoyaProvider<GitHub>(stubClosure: MoyaProvider.ImmediatelyStub)
         }
-        
-        describe("provider with RACSignal") {
-            
-            it("returns a Response object") {
-                var called = false
-                
-                provider.request(.Zen).subscribeNext { (object) -> Void in
-                    if let _ = object as? Moya.Response {
-                        called = true
-                    }
-                }
-                
-                expect(called).to(beTruthy())
-            }
-            
-            it("returns stubbed data for zen request") {
-                var message: String?
-                
-                let target: GitHub = .Zen
-                provider.request(target).subscribeNext { (object) -> Void in
-                    if let response = object as? Moya.Response {
-                        message = NSString(data: response.data, encoding: NSUTF8StringEncoding) as? String
-                    }
-                }
-                
-                _ = target.sampleData as NSData
-                expect(message).toNot(beNil())
-            }
-            
-            it("returns correct data for user profile request") {
-                var receivedResponse: NSDictionary?
-                
-                let target: GitHub = .UserProfile("ashfurrow")
-                provider.request(target).subscribeNext { (object) -> Void in
-                    if let response = object as? Moya.Response {
-                        receivedResponse = try! NSJSONSerialization.JSONObjectWithData(response.data, options: []) as? NSDictionary
-                    }
-                }
-                
-                let sampleData = target.sampleData as NSData
-                let sampleResponse = try! NSJSONSerialization.JSONObjectWithData(sampleData, options: []) as! NSDictionary
-                
-                expect(receivedResponse) == sampleResponse
-            }
-        }
 
         describe("failing") {
             var provider: ReactiveCocoaMoyaProvider<GitHub>!
@@ -73,7 +28,7 @@ class ReactiveCocoaMoyaProviderSpec: QuickSpec {
                 }
                 
                 switch receivedError {
-                case .Some(.Underlying(let error as NSError)):
+                case .Some(.Underlying(let error)):
                     expect(error.localizedDescription) == "Houston, we have a problem"
                 default:
                     fail("expected an Underlying error that Houston has a problem")
@@ -240,5 +195,39 @@ class ReactiveCocoaMoyaProviderSpec: QuickSpec {
                 expect(response).to(beNil())
             }
         }
+        
+        describe("a reactive provider") {
+            var provider: ReactiveCocoaMoyaProvider<GitHub>!
+            beforeEach {
+                provider = ReactiveCocoaMoyaProvider<GitHub>(trackInflights: true)
+            }
+
+            it("returns identical signalproducers for inflight requests") {
+                let target: GitHub = .Zen
+                let signalProducer1:SignalProducer<Moya.Response, Moya.Error> = provider.request(target)
+                let signalProducer2:SignalProducer<Moya.Response, Moya.Error> = provider.request(target)
+
+                expect(provider.inflightRequests.keys.count).to(equal(0))
+
+                var receivedResponse: Moya.Response!
+
+                signalProducer1.startWithNext { (response) -> Void in
+                    receivedResponse = response
+                    expect(provider.inflightRequests.count).to(equal(1))
+                }
+
+                signalProducer2.startWithNext { (response) -> Void in
+                    expect(receivedResponse).toNot(beNil())
+                    expect(receivedResponse).to(beIndenticalToResponse(response))
+                    expect(provider.inflightRequests.count).to(equal(1))
+                }
+
+
+                // Allow for network request to complete
+                expect(provider.inflightRequests.count).toEventually( equal(0))
+                
+            }
+        }
+
     }
 }

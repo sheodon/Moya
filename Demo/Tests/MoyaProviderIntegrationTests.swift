@@ -22,11 +22,11 @@ class MoyaProviderIntegrationTests: QuickSpec {
         
         beforeEach {
             OHHTTPStubs.stubRequestsPassingTest({$0.URL!.path == "/zen"}) { _ in
-                return OHHTTPStubsResponse(data: GitHub.Zen.sampleData, statusCode: 200, headers: nil).responseTime(0.5)
+                return OHHTTPStubsResponse(data: GitHub.Zen.sampleData, statusCode: 200, headers: nil)
             }
             
             OHHTTPStubs.stubRequestsPassingTest({$0.URL!.path == "/users/ashfurrow"}) { _ in
-                return OHHTTPStubsResponse(data: GitHub.UserProfile("ashfurrow").sampleData, statusCode: 200, headers: nil).responseTime(0.5)
+                return OHHTTPStubsResponse(data: GitHub.UserProfile("ashfurrow").sampleData, statusCode: 200, headers: nil)
             }
             
             OHHTTPStubs.stubRequestsPassingTest({$0.URL!.path == "/basic-auth/user/passwd"}) { _ in
@@ -104,6 +104,35 @@ class MoyaProviderIntegrationTests: QuickSpec {
                         }
 
                         expect(manager.called) == true
+                    }
+                    
+                    it("uses other background queue") {
+                        var isMainThread: Bool?
+                        let queue = dispatch_queue_create("background_queue", DISPATCH_QUEUE_CONCURRENT)
+                        let target: GitHub = .Zen
+                        
+                        waitUntil { done in
+                            provider.request(target, queue:queue) { _ in
+                                isMainThread = NSThread.isMainThread()
+                                done()
+                            }
+                        }
+                        
+                        expect(isMainThread) == false
+                    }
+                    
+                    it("uses main queue") {
+                        var isMainThread: Bool?
+                        let target: GitHub = .Zen
+                        
+                        waitUntil { done in 
+                            provider.request(target) { _ in
+                                isMainThread = NSThread.isMainThread()
+                                done()
+                            }
+                        }
+                        
+                        expect(isMainThread) == true
                     }
                 }
                 
@@ -212,46 +241,6 @@ class MoyaProviderIntegrationTests: QuickSpec {
                         expect(log).to( contain("Response:") )
                         expect(log).to( contain("{ URL: https://api.github.com/zen } { status code: 200, headers") )
                         expect(log).to( contain("\"Content-Length\" = 43;") )
-                    }
-                }
-                
-                describe("a reactive provider with RACSignal") {
-                    var provider: ReactiveCocoaMoyaProvider<GitHub>!
-                    beforeEach {
-                        provider = ReactiveCocoaMoyaProvider<GitHub>()
-                    }
-                    
-                    it("returns some data for zen request") {
-                        var message: String?
-
-                        waitUntil { done in
-                            provider.request(GitHub.Zen).subscribeNext { response in
-                                if let response = response as? Moya.Response {
-                                    message = NSString(data: response.data, encoding: NSUTF8StringEncoding) as? String
-                                }
-
-                                done()
-                            }
-                        }
-                        
-                        expect(message) == zenMessage
-                    }
-                    
-                    it("returns some data for user profile request") {
-                        var message: String?
-
-                        waitUntil { done in
-                            let target: GitHub = .UserProfile("ashfurrow")
-                            provider.request(target).subscribeNext { response in
-                                if let response = response as? Moya.Response {
-                                    message = NSString(data: response.data, encoding: NSUTF8StringEncoding) as? String
-                                }
-
-                                done()
-                            }
-                        }
-                        
-                        expect(message) == userMessage
                     }
                 }
             }
